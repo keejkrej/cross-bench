@@ -1,7 +1,6 @@
 """Plotting utilities for visualizing segmentation and transfer results."""
 
 from pathlib import Path
-from typing import Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -10,7 +9,7 @@ import matplotlib.patches as patches
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
-from cross_bench.predictor import SegmentationResult, Prompt, PromptType
+from cross_bench.predictor import SegmentationResult, Prompt, PromptType, PromptMap
 from cross_bench.datasets import DatasetSample
 from cross_bench.benchmarks.base import BenchmarkResult
 
@@ -36,6 +35,7 @@ def _overlay_mask(
     color: tuple[float, ...] = (0.12, 0.47, 0.71, 0.5),
     contour_color: str = "white",
     contour_width: float = 2,
+    contour_linestyle: str = "-",
 ) -> None:
     """Overlay a mask on an axes with color fill and contour.
 
@@ -45,7 +45,11 @@ def _overlay_mask(
         color: RGBA color for the fill
         contour_color: Color for the contour line
         contour_width: Width of the contour line
+        contour_linestyle: Line style for contour ("-" solid, "--" dashed)
     """
+    # Squeeze batch dimension if present (handle both 2D and 3D masks)
+    if mask.ndim == 3:
+        mask = mask.squeeze(0)
     # Create colored overlay
     h, w = mask.shape
     overlay = np.zeros((h, w, 4))
@@ -53,7 +57,13 @@ def _overlay_mask(
     ax.imshow(overlay)
 
     # Add contour
-    ax.contour(mask, levels=[0.5], colors=[contour_color], linewidths=[contour_width])
+    ax.contour(
+        mask,
+        levels=[0.5],
+        colors=[contour_color],
+        linewidths=[contour_width],
+        linestyles=[contour_linestyle],
+    )
 
 
 def _draw_bbox(
@@ -62,7 +72,7 @@ def _draw_bbox(
     color: str = "yellow",
     linewidth: float = 2,
     linestyle: str = "--",
-    label: Optional[str] = None,
+    label: str | None = None,
 ) -> None:
     """Draw a bounding box on axes.
 
@@ -103,7 +113,7 @@ def _draw_point(
     color: str = "yellow",
     marker: str = "o",
     size: int = 100,
-    label: Optional[str] = None,
+    label: str | None = None,
 ) -> None:
     """Draw a point marker on axes.
 
@@ -136,54 +146,123 @@ def _draw_point(
         )
 
 
+# Distinct colors for each prompt type visualization
+PROMPT_COLORS = {
+    PromptType.TEXT: "#3498db",    # blue
+    PromptType.POINT: "#2ecc71",   # green
+    PromptType.BOX: "#f1c40f",     # yellow
+    PromptType.MASK: "#e74c3c",    # red
+}
+
+
+def _hex_to_rgba(hex_color: str, alpha: float = 0.3) -> tuple[float, float, float, float]:
+    """Convert hex color to RGBA tuple."""
+    hex_color = hex_color.lstrip("#")
+    r, g, b = tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+    return (r, g, b, alpha)
+
+
 def _draw_prompt(
     ax: Axes,
     prompt: Prompt,
-    color: str = "yellow",
+    color: str | None = None,
 ) -> None:
     """Draw a prompt visualization on axes.
 
     Args:
         ax: Matplotlib axes
         prompt: Prompt to visualize
-        color: Color for the prompt visualization
+        color: Color override (uses type-specific color if None)
     """
+    # Use type-specific color if not overridden
+    color = color or PROMPT_COLORS.get(prompt.prompt_type, "yellow")
+
     if prompt.prompt_type == PromptType.POINT:
-        _draw_point(ax, prompt.value, color=color, label="PROMPT")
+        _draw_point(ax, prompt.value, color=color)
 
     elif prompt.prompt_type == PromptType.BOX:
         x, y, w, h = prompt.value
         box = (x, y, x + w, y + h)
-        _draw_bbox(ax, box, color=color, label="PROMPT")
+        _draw_bbox(ax, box, color=color)
 
     elif prompt.prompt_type == PromptType.MASK:
         _overlay_mask(
             ax,
             prompt.value,
-            color=(1.0, 1.0, 0.0, 0.3),  # yellow with alpha
+            color=_hex_to_rgba(color, alpha=0.3),
             contour_color=color,
+            contour_linestyle="--",  # dashed for prompt masks
         )
 
     elif prompt.prompt_type == PromptType.TEXT:
-        # Add text annotation in corner
+        # Text prompts are shown in the legend only, not drawn on the image
+        pass
+
+
+def _draw_prompt_legend(
+    ax: Axes,
+    prompts: PromptMap,
+    position: str = "upper left",
+) -> None:
+    """Draw a legend showing active prompts with visual indicators.
+
+    Args:
+        ax: Matplotlib axes
+        prompts: PromptMap of active prompts
+        position: Legend position ("upper left", "upper right", etc.)
+    """
+    if not prompts:
+        return
+
+    # Build legend entries: (label, color)
+    legend_entries = []
+    for prompt_type, prompt in prompts.items():
+        color = PROMPT_COLORS.get(prompt_type, "yellow")
+
+        if prompt_type == PromptType.TEXT:
+            legend_entries.append((f"text: {prompt.value}", color))
+        elif prompt_type == PromptType.POINT:
+            legend_entries.append(("point: ●", color))
+        elif prompt_type == PromptType.BOX:
+            legend_entries.append(("box: ╍╍╍", color))
+        elif prompt_type == PromptType.MASK:
+            legend_entries.append(("mask: ╍╍╍", color))
+
+    if not legend_entries:
+        return
+
+    # Position mapping
+    positions = {
+        "upper left": (0.02, 0.98, "top", "left"),
+        "upper right": (0.98, 0.98, "top", "right"),
+        "lower left": (0.02, 0.02, "bottom", "left"),
+        "lower right": (0.98, 0.02, "bottom", "right"),
+    }
+    x, y, va, ha = positions.get(position, positions["upper left"])
+
+    # Draw each entry vertically stacked
+    y_offset = 0
+    for label, color in legend_entries:
         ax.text(
-            0.02, 0.98,
-            f"Text: \"{prompt.value}\"",
+            x, y - y_offset,
+            label,
             transform=ax.transAxes,
             color=color,
-            fontsize=10,
+            fontsize=9,
             fontweight="bold",
-            va="top",
-            bbox=dict(boxstyle="round", facecolor="black", alpha=0.7),
+            va=va,
+            ha=ha,
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="black", alpha=0.7),
         )
+        y_offset += 0.045
 
 
 def plot_segmentation(
     image: Image.Image,
     result: SegmentationResult,
-    prompt: Optional[Prompt] = None,
-    ax: Optional[Axes] = None,
-    title: Optional[str] = None,
+    prompts: PromptMap,
+    ax: Axes | None = None,
+    title: str | None = None,
     show_scores: bool = True,
     show_boxes: bool = True,
     show_prompt: bool = True,
@@ -193,12 +272,12 @@ def plot_segmentation(
     Args:
         image: PIL Image to display
         result: SegmentationResult with masks and scores
-        prompt: Optional prompt to visualize
+        prompts: PromptMap (dict[PromptType, Prompt]) to visualize
         ax: Matplotlib axes (created if None)
         title: Optional title for the plot
         show_scores: Whether to show confidence scores
         show_boxes: Whether to show bounding boxes
-        show_prompt: Whether to show the prompt
+        show_prompt: Whether to show the prompts
 
     Returns:
         Matplotlib axes with the plot
@@ -231,9 +310,11 @@ def plot_segmentation(
             color_rgb = MASK_COLORS[i % len(MASK_COLORS)][:3]
             _draw_bbox(ax, box, color=color_rgb, linewidth=1.5, linestyle="-")
 
-    # Draw prompt
-    if show_prompt and prompt is not None:
-        _draw_prompt(ax, prompt)
+    # Draw prompts and legend
+    if show_prompt and prompts:
+        for p in prompts.values():
+            _draw_prompt(ax, p)
+        _draw_prompt_legend(ax, prompts)
 
     # Set title
     if title:
@@ -247,9 +328,9 @@ def plot_transfer_comparison(
     sample: DatasetSample,
     ref_result: SegmentationResult,
     tgt_result: SegmentationResult,
-    prompt: Optional[Prompt] = None,
+    prompts: PromptMap,
     figsize: tuple[int, int] = (16, 8),
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> Figure:
     """Plot reference and target segmentation side by side.
 
@@ -257,7 +338,7 @@ def plot_transfer_comparison(
         sample: Dataset sample with images
         ref_result: Segmentation result for reference image
         tgt_result: Segmentation result for target image
-        prompt: Prompt used for segmentation
+        prompts: PromptMap (dict[PromptType, Prompt]) used for segmentation
         figsize: Figure size
         title: Optional overall title
 
@@ -270,7 +351,7 @@ def plot_transfer_comparison(
     plot_segmentation(
         sample.reference_image,
         ref_result,
-        prompt=prompt,
+        prompts=prompts,
         ax=axes[0],
         title=f"Reference: {sample.sample_id}",
         show_prompt=True,
@@ -280,7 +361,7 @@ def plot_transfer_comparison(
     plot_segmentation(
         sample.target_image,
         tgt_result,
-        prompt=None,  # Don't show prompt on target
+        prompts={},  # Don't show prompts on target
         ax=axes[1],
         title=f"Target: {tgt_result.num_detections} detections",
         show_prompt=False,
@@ -297,7 +378,7 @@ def plot_benchmark_grid(
     sample: DatasetSample,
     results: dict[str, BenchmarkResult],
     figsize: tuple[int, int] = (20, 10),
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> Figure:
     """Plot benchmark results for multiple prompt types in a grid.
 
@@ -435,7 +516,7 @@ def create_benchmark_figure(
 
 def save_figure(
     fig: Figure,
-    output_path: Union[Path, str],
+    output_path: Path | str,
     dpi: int = 150,
     close: bool = True,
 ) -> None:
