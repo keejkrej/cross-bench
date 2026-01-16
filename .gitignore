@@ -81,6 +81,9 @@ outputs/
 *.jpg
 *.jpeg
 !examples/sample_data/**
+!assets/**/*.png
+!assets/**/*.jpg
+!assets/**/*.jpeg
 
 # Model weights
 *.pt
