@@ -1,0 +1,30 @@
+# Default benchmark configuration
+# Copy and modify for your specific benchmark runs
+
+# Confidence threshold for detections
+confidence_threshold: 0.5
+
+# Prompt types to benchmark
+# Options: mask, box, point, text
+prompt_types:
+  - mask
+  - box
+  - point
+
+# Maximum samples to process (null for all)
+max_samples: null
+
+# Output directory for results
+output_dir: ./results
+
+# Whether to save visualization figures
+save_visualizations: true
+
+# DPI for saved figures
+visualization_dpi: 150
+
+# Device: 'cuda', 'cpu', or 'auto'
+device: auto
+
+# Print progress during benchmark
+verbose: true

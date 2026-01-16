@@ -1,0 +1,26 @@
+{
+  "name": "sample_dataset",
+  "description": "Example dataset structure for cross-bench",
+  "samples": [
+    {
+      "id": "sample_001",
+      "reference": "reference/sample_001.jpg",
+      "mask": "masks/sample_001.png",
+      "target": "target/sample_001.jpg",
+      "category": "dog",
+      "metadata": {
+        "source": "example"
+      }
+    },
+    {
+      "id": "sample_002",
+      "reference": "reference/sample_002.jpg",
+      "mask": "masks/sample_002.png",
+      "target": "target/sample_002.jpg",
+      "category": "cat",
+      "metadata": {
+        "source": "example"
+      }
+    }
+  ]
+}

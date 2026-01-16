@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cross-bench"
+version = "0.1.0"
+description = "Benchmarking tool for cross-image segmentation/detection with SAM3"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Cross-Bench Team"}
+]
+keywords = [
+    "segmentation",
+    "computer-vision",
+    "benchmark",
+    "sam3",
+    "cross-image",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "pillow>=9.0.0",
+    "matplotlib>=3.6.0",
+    "torch>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+]
+sam3 = [
+    # Install SAM3 from the fork for full functionality
+    # pip install git+https://github.com/keejkrej/sam3.git@feat/cross-image
+]
+
+[project.scripts]
+cross-bench = "cross_bench.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/keejkrej/cross-bench"
+Repository = "https://github.com/keejkrej/cross-bench"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cross_bench*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
