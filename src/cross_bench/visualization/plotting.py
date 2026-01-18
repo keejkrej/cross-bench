@@ -36,6 +36,7 @@ def _overlay_mask(
     contour_color: str = "white",
     contour_width: float = 2,
     contour_linestyle: str = "-",
+    contour_only: bool = False,
 ) -> None:
     """Overlay a mask on an axes with color fill and contour.
 
@@ -46,15 +47,18 @@ def _overlay_mask(
         contour_color: Color for the contour line
         contour_width: Width of the contour line
         contour_linestyle: Line style for contour ("-" solid, "--" dashed)
+        contour_only: If True, only draw contour without fill
     """
     # Squeeze batch dimension if present (handle both 2D and 3D masks)
     if mask.ndim == 3:
         mask = mask.squeeze(0)
-    # Create colored overlay
-    h, w = mask.shape
-    overlay = np.zeros((h, w, 4))
-    overlay[mask > 0.5] = color
-    ax.imshow(overlay)
+    
+    # Create colored overlay (skip if contour_only)
+    if not contour_only:
+        h, w = mask.shape
+        overlay = np.zeros((h, w, 4))
+        overlay[mask > 0.5] = color
+        ax.imshow(overlay)
 
     # Add contour
     ax.contour(
@@ -189,9 +193,9 @@ def _draw_prompt(
         _overlay_mask(
             ax,
             prompt.value,
-            color=_hex_to_rgba(color, alpha=0.3),
             contour_color=color,
             contour_linestyle="--",  # dashed for prompt masks
+            contour_only=True,  # only draw contour, not fill
         )
 
     elif prompt.prompt_type == PromptType.TEXT:
