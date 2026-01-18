@@ -262,12 +262,18 @@ def transfer(
             tgt_result = result.results.get("target")
 
             if ref_result and tgt_result:
+                # Calculate IoU scores
+                ref_iou = result.calculate_iou("reference")
+                tgt_iou = result.calculate_iou("target")
+                
                 fig = plot_transfer_comparison(
                     sample,
                     ref_result,
                     tgt_result,
                     prompts=ref_result.prompts,
                     title=f"Concept Transfer - {result.prompt_type.upper()}",
+                    ref_iou=ref_iou,
+                    tgt_iou=tgt_iou,
                 )
                 save_figure(
                     fig,

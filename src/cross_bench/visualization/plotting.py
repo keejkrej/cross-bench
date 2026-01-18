@@ -335,6 +335,8 @@ def plot_transfer_comparison(
     prompts: PromptMap,
     figsize: tuple[int, int] = (16, 8),
     title: str | None = None,
+    ref_iou: Optional[float] = None,
+    tgt_iou: Optional[float] = None,
 ) -> Figure:
     """Plot reference and target segmentation side by side.
 
@@ -345,6 +347,8 @@ def plot_transfer_comparison(
         prompts: PromptMap (dict[PromptType, Prompt]) used for segmentation
         figsize: Figure size
         title: Optional overall title
+        ref_iou: IoU score for reference image
+        tgt_iou: IoU score for target image
 
     Returns:
         Matplotlib figure
@@ -352,22 +356,30 @@ def plot_transfer_comparison(
     fig, axes = plt.subplots(1, 2, figsize=figsize)
 
     # Reference image
+    ref_title = f"Reference: {sample.sample_id}"
+    if ref_iou is not None:
+        ref_title += f" (IoU: {ref_iou:.3f})"
+    
     plot_segmentation(
         sample.reference_image,
         ref_result,
         prompts=prompts,
         ax=axes[0],
-        title=f"Reference: {sample.sample_id}",
+        title=ref_title,
         show_prompt=True,
     )
 
     # Target image
+    tgt_title = f"Target: {tgt_result.num_detections} detections"
+    if tgt_iou is not None:
+        tgt_title += f" (IoU: {tgt_iou:.3f})"
+    
     plot_segmentation(
         sample.target_image,
         tgt_result,
         prompts={},  # Don't show prompts on target
         ax=axes[1],
-        title=f"Target: {tgt_result.num_detections} detections",
+        title=tgt_title,
         show_prompt=False,
     )
 
@@ -412,12 +424,18 @@ def plot_benchmark_grid(
 
         # Reference row
         if ref_result:
+            # Calculate IoU
+            ref_iou = result.calculate_iou("reference")
+            ref_title = f"{ptype.upper()} - Reference ({ref_result.num_detections})"
+            if ref_iou is not None:
+                ref_title += f" [IoU: {ref_iou:.3f}]"
+            
             plot_segmentation(
                 sample.reference_image,
                 ref_result,
                 prompts=ref_result.prompts,
                 ax=axes[0, col],
-                title=f"{ptype.upper()} - Reference ({ref_result.num_detections})",
+                title=ref_title,
             )
         else:
             axes[0, col].text(0.5, 0.5, "No result", ha="center", va="center")
@@ -425,11 +443,17 @@ def plot_benchmark_grid(
 
         # Target row
         if tgt_result:
+            # Calculate IoU
+            tgt_iou = result.calculate_iou("target")
+            tgt_title = f"{ptype.upper()} - Target ({tgt_result.num_detections})"
+            if tgt_iou is not None:
+                tgt_title += f" [IoU: {tgt_iou:.3f}]"
+            
             plot_segmentation(
                 sample.target_image,
                 tgt_result,
                 ax=axes[1, col],
-                title=f"{ptype.upper()} - Target ({tgt_result.num_detections})",
+                title=tgt_title,
                 show_prompt=False,
             )
         else:
