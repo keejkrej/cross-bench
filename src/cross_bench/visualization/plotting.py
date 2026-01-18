@@ -415,7 +415,7 @@ def plot_benchmark_grid(
             plot_segmentation(
                 sample.reference_image,
                 ref_result,
-                prompt=ref_result.prompt,
+                prompts=ref_result.prompts,
                 ax=axes[0, col],
                 title=f"{ptype.upper()} - Reference ({ref_result.num_detections})",
             )
@@ -490,7 +490,7 @@ def create_benchmark_figure(
         plot_segmentation(
             sample.reference_image,
             ref_result,
-            prompt=ref_result.prompt,
+            prompts=ref_result.prompts,
             ax=axes[col],
             title=f"Reference ({benchmark_result.prompt_type})",
         )

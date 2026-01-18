@@ -193,6 +193,7 @@ class CrossImageDataset:
         images_dir: str = "images",
         mask_dir: str = "masks",
         image_extensions: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp"),
+        sample_ratio: float = 0.1,
     ) -> "CrossImageDataset":
         """Load dataset from a directory with images and masks.
 
@@ -214,10 +215,13 @@ class CrossImageDataset:
             images_dir: Subdirectory name for images
             mask_dir: Subdirectory name for masks
             image_extensions: Tuple of valid image extensions
+            sample_ratio: Fraction of pairs to sample (0.1 = 10%)
 
         Returns:
             CrossImageDataset instance
         """
+        import random
+        
         directory = Path(directory)
 
         img_dir = directory / images_dir
@@ -238,19 +242,28 @@ class CrossImageDataset:
         # Find common stems (images with masks)
         common_stems = sorted(set(img_files.keys()) & set(msk_files.keys()))
 
+        # Generate all possible pairs
+        all_pairs = [
+            (ref_stem, tgt_stem)
+            for i, ref_stem in enumerate(common_stems)
+            for j, tgt_stem in enumerate(common_stems)
+            if i != j
+        ]
+        
+        # Sample pairs
+        n_samples = max(1, int(len(all_pairs) * sample_ratio))
+        sampled_pairs = random.sample(all_pairs, min(n_samples, len(all_pairs)))
+
         dataset = cls(name=directory.name)
 
-        # Create cross-image pairs: each image as reference, others as targets
-        for i, ref_stem in enumerate(common_stems):
-            for j, tgt_stem in enumerate(common_stems):
-                if i != j:  # Don't use same image as both ref and target
-                    sample = DatasetSample(
-                        sample_id=f"{ref_stem}_to_{tgt_stem}",
-                        reference_image_path=img_files[ref_stem],
-                        reference_mask_path=msk_files[ref_stem],
-                        target_image_path=img_files[tgt_stem],
-                    )
-                    dataset.add_sample(sample)
+        for ref_stem, tgt_stem in sampled_pairs:
+            sample = DatasetSample(
+                sample_id=f"{ref_stem}_to_{tgt_stem}",
+                reference_image_path=img_files[ref_stem],
+                reference_mask_path=msk_files[ref_stem],
+                target_image_path=img_files[tgt_stem],
+            )
+            dataset.add_sample(sample)
 
         return dataset
 

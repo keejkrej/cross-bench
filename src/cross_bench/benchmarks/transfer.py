@@ -83,11 +83,14 @@ class ConceptTransferBenchmark(BaseBenchmark):
 
         for ptype, prompt in prompts.items():
             try:
+                # Wrap single prompt in PromptMap
+                prompt_map = {prompt.prompt_type: prompt}
+                
                 # Run segmentation and transfer
                 ref_result, tgt_result = self.predictor.segment_and_transfer(
                     reference_image=sample.reference_image,
                     target_image=sample.target_image,
-                    prompt=prompt,
+                    prompts=prompt_map,
                     threshold=self.confidence_threshold,
                 )
 

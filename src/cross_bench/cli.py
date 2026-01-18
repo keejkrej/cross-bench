@@ -59,6 +59,16 @@ def segmentation(
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
     visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
+    # Geometry encoder flags
+    points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct")] = True,
+    points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool")] = True,
+    points_pos: Annotated[bool, typer.Option("--points-pos/--no-points-pos")] = True,
+    boxes_direct: Annotated[bool, typer.Option("--boxes-direct/--no-boxes-direct")] = True,
+    boxes_pool: Annotated[bool, typer.Option("--boxes-pool/--no-boxes-pool")] = True,
+    boxes_pos: Annotated[bool, typer.Option("--boxes-pos/--no-boxes-pos")] = True,
+    masks_direct: Annotated[bool, typer.Option("--masks-direct/--no-masks-direct")] = True,
+    masks_pool: Annotated[bool, typer.Option("--masks-pool/--no-masks-pool")] = True,
+    masks_pos: Annotated[bool, typer.Option("--masks-pos/--no-masks-pos")] = True,
 ) -> None:
     """Run the segmentation benchmark on a dataset."""
     # Load dataset
@@ -73,8 +83,21 @@ def segmentation(
     output_dir = output if output else Path("results") / "segmentation"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build geometry encoder config
+    geo_config = {
+        'points_direct_project': points_direct,
+        'points_pool': points_pool,
+        'points_pos_enc': points_pos,
+        'boxes_direct_project': boxes_direct,
+        'boxes_pool': boxes_pool,
+        'boxes_pos_enc': boxes_pos,
+        'masks_direct_project': masks_direct,
+        'masks_pool': masks_pool,
+        'masks_pos_enc': masks_pos,
+    }
+    
     # Create predictor and benchmark
-    predictor = CrossImagePredictor(confidence_threshold=threshold)
+    predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
     benchmark = SegmentationBenchmark(
         predictor=predictor,
         output_dir=output_dir,
@@ -122,6 +145,16 @@ def transfer(
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
     visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
+    # Geometry encoder flags
+    points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct")] = True,
+    points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool")] = True,
+    points_pos: Annotated[bool, typer.Option("--points-pos/--no-points-pos")] = True,
+    boxes_direct: Annotated[bool, typer.Option("--boxes-direct/--no-boxes-direct")] = True,
+    boxes_pool: Annotated[bool, typer.Option("--boxes-pool/--no-boxes-pool")] = True,
+    boxes_pos: Annotated[bool, typer.Option("--boxes-pos/--no-boxes-pos")] = True,
+    masks_direct: Annotated[bool, typer.Option("--masks-direct/--no-masks-direct")] = True,
+    masks_pool: Annotated[bool, typer.Option("--masks-pool/--no-masks-pool")] = True,
+    masks_pos: Annotated[bool, typer.Option("--masks-pos/--no-masks-pos")] = True,
 ) -> None:
     """Run the concept transfer benchmark on a dataset."""
     # Load dataset
@@ -136,8 +169,21 @@ def transfer(
     output_dir = output if output else Path("results") / "transfer"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build geometry encoder config
+    geo_config = {
+        'points_direct_project': points_direct,
+        'points_pool': points_pool,
+        'points_pos_enc': points_pos,
+        'boxes_direct_project': boxes_direct,
+        'boxes_pool': boxes_pool,
+        'boxes_pos_enc': boxes_pos,
+        'masks_direct_project': masks_direct,
+        'masks_pool': masks_pool,
+        'masks_pos_enc': masks_pos,
+    }
+
     # Create predictor and benchmark
-    predictor = CrossImagePredictor(confidence_threshold=threshold)
+    predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
     benchmark = ConceptTransferBenchmark(
         predictor=predictor,
         output_dir=output_dir,
@@ -193,7 +239,7 @@ def transfer(
                     sample,
                     ref_result,
                     tgt_result,
-                    prompt=ref_result.prompt,
+                    prompts=ref_result.prompts,
                     title=f"Concept Transfer - {result.prompt_type.upper()}",
                 )
                 save_figure(
