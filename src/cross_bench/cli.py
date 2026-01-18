@@ -214,6 +214,16 @@ def single(
     mask: Annotated[Optional[Path], typer.Option("--mask", help="Path to mask image")] = None,
     threshold: Annotated[float, typer.Option("--threshold", help="Confidence threshold")] = 0.5,
     output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output image path")] = None,
+    # Geometry encoder flags
+    points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct", help="Points direct projection")] = True,
+    points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool", help="Points pooling")] = True,
+    points_pos: Annotated[bool, typer.Option("--points-pos/--no-points-pos", help="Points position encoding")] = True,
+    boxes_direct: Annotated[bool, typer.Option("--boxes-direct/--no-boxes-direct", help="Boxes direct projection")] = True,
+    boxes_pool: Annotated[bool, typer.Option("--boxes-pool/--no-boxes-pool", help="Boxes pooling")] = True,
+    boxes_pos: Annotated[bool, typer.Option("--boxes-pos/--no-boxes-pos", help="Boxes position encoding")] = True,
+    masks_direct: Annotated[bool, typer.Option("--masks-direct/--no-masks-direct", help="Masks direct projection")] = True,
+    masks_pool: Annotated[bool, typer.Option("--masks-pool/--no-masks-pool", help="Masks pooling")] = True,
+    masks_pos: Annotated[bool, typer.Option("--masks-pos/--no-masks-pos", help="Masks position encoding")] = True,
 ) -> None:
     """Run on single image(s) for quick testing.
 
@@ -264,8 +274,21 @@ def single(
         info(f"Loading target: [bold]{target}[/bold]")
         tgt_img = Image.open(target).convert("RGB")
 
+    # Build geometry encoder config
+    geo_config = {
+        'points_direct_project': points_direct,
+        'points_pool': points_pool,
+        'points_pos_enc': points_pos,
+        'boxes_direct_project': boxes_direct,
+        'boxes_pool': boxes_pool,
+        'boxes_pos_enc': boxes_pos,
+        'masks_direct_project': masks_direct,
+        'masks_pool': masks_pool,
+        'masks_pos_enc': masks_pos,
+    }
+    
     info("Initializing predictor...")
-    predictor = CrossImagePredictor(confidence_threshold=threshold)
+    predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
 
     if len(prompts) > 1:
         info(f"Combining {len(prompts)} prompts together")

@@ -212,6 +212,7 @@ class CrossImagePredictor:
         model: Optional[Any] = None,
         device: Optional[str] = None,
         confidence_threshold: float = 0.5,
+        geo_config: Optional[dict] = None,
     ):
         """Initialize the predictor.
 
@@ -219,11 +220,14 @@ class CrossImagePredictor:
             model: Pre-loaded SAM3 model (if None, will be loaded on first use)
             device: Device to use ('cuda' or 'cpu', auto-detected if None)
             confidence_threshold: Default confidence threshold for detections
+            geo_config: Geometry encoder config dict with keys like 'points_direct_project',
+                       'points_pool', 'points_pos_enc', 'boxes_*', 'masks_*'
         """
         self._model = model
         self._processor = None
         self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.confidence_threshold = confidence_threshold
+        self._geo_config = geo_config
         self._initialized = False
 
     def _ensure_initialized(self) -> None:
@@ -240,7 +244,7 @@ class CrossImagePredictor:
             bpe_path = str(files("sam3").joinpath("assets/bpe_simple_vocab_16e6.txt.gz"))
 
             if self._model is None:
-                self._model = build_sam3_image_model(bpe_path=bpe_path)
+                self._model = build_sam3_image_model(bpe_path=bpe_path, geo_config=self._geo_config)
 
             self._processor = Sam3Processor(
                 self._model,
