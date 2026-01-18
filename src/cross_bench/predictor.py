@@ -70,10 +70,14 @@ class Prompt:
         prompt_type: Type of the prompt
         value: The prompt value (text string, point coords, box coords, or mask)
         label: Whether this is a positive (True) or negative (False) prompt
+        encoding_method: For mask prompts, the encoding method to use
+        encoding_params: Additional parameters for encoding methods
     """
     prompt_type: PromptType
     value: Any
     label: bool = True
+    encoding_method: Optional[str] = None
+    encoding_params: dict = field(default_factory=dict)
 
     @classmethod
     def from_text(cls, text: str) -> "Prompt":
@@ -104,13 +108,33 @@ class Prompt:
         return cls(PromptType.BOX, (x, y, w, h), True)
 
     @classmethod
-    def from_mask(cls, mask: np.ndarray) -> "Prompt":
+    def from_mask(
+        cls, 
+        mask: np.ndarray, 
+        encoding_method: str = "default",
+        **encoding_params
+    ) -> "Prompt":
         """Create a mask prompt.
 
         Args:
             mask: Binary mask array (H, W) with 1 for object, 0 for background
+            encoding_method: How to encode the mask. Options:
+                - "default": Use full mask encoding
+                - "box": Convert mask to bounding box
+                - "grid_simple": Sample uniform grid of points within mask
+                - "grid_hybrid": Sample boundary + interior grid points
+            **encoding_params: Additional parameters for encoding methods:
+                - spacing (int): Grid spacing for grid_simple (default: 16)
+                - max_points (int): Max points to sample (default: 50 for simple, 100 for hybrid)
+                - boundary_ratio (float): Fraction of points for boundary in grid_hybrid (default: 0.3)
         """
-        return cls(PromptType.MASK, mask, True)
+        return cls(
+            PromptType.MASK, 
+            mask, 
+            True, 
+            encoding_method=encoding_method,
+            encoding_params=encoding_params
+        )
 
 
 @dataclass
@@ -268,7 +292,15 @@ class CrossImagePredictor:
             return {"type": "box", "box": prompt.value, "label": prompt.label}
         elif prompt.prompt_type == PromptType.MASK:
             mask_tensor = torch.from_numpy(prompt.value.astype(np.float32))
-            return {"type": "mask", "mask": mask_tensor, "label": prompt.label}
+            payload = {
+                "type": "mask", 
+                "mask": mask_tensor, 
+                "label": prompt.label,
+                "encoding_method": prompt.encoding_method or "default",
+            }
+            # Add encoding params
+            payload.update(prompt.encoding_params)
+            return payload
         else:
             raise ValueError(f"Unknown prompt type: {prompt.prompt_type}")
 
@@ -344,21 +376,86 @@ class CrossImagePredictor:
                     mask_pil = mask_pil.resize((img_w, img_h), Image.Resampling.NEAREST)
                     mask = torch.from_numpy(np.array(mask_pil) / 255.0).float()
 
-                # Resize to processor resolution
-                mask_pil = Image.fromarray((mask.numpy() * 255).astype(np.uint8))
-                mask_resized = mask_pil.resize(
-                    (self._processor.resolution, self._processor.resolution),
-                    Image.Resampling.NEAREST
-                )
-                mask_tensor = torch.from_numpy(np.array(mask_resized) / 255.0).float()
+                encoding_method = prompt.encoding_method or "default"
+                
+                if encoding_method == "default":
+                    # Resize to processor resolution
+                    mask_pil = Image.fromarray((mask.numpy() * 255).astype(np.uint8))
+                    mask_resized = mask_pil.resize(
+                        (self._processor.resolution, self._processor.resolution),
+                        Image.Resampling.NEAREST
+                    )
+                    mask_tensor = torch.from_numpy(np.array(mask_resized) / 255.0).float()
 
-                masks = mask_tensor.to(
-                    device=self._device, dtype=torch.float32
-                ).view(1, 1, 1, *mask_tensor.shape[-2:])
-                labels = torch.tensor(
-                    [prompt.label], device=self._device, dtype=torch.long
-                ).view(1, 1)
-                state["geometric_prompt"].append_masks(masks, labels)
+                    masks = mask_tensor.to(
+                        device=self._device, dtype=torch.float32
+                    ).view(1, 1, 1, *mask_tensor.shape[-2:])
+                    labels = torch.tensor(
+                        [prompt.label], device=self._device, dtype=torch.long
+                    ).view(1, 1)
+                    state["geometric_prompt"].append_masks(masks, labels)
+                    
+                elif encoding_method == "box":
+                    # Convert mask to bounding box
+                    bbox = self._processor._mask_to_bbox(mask)
+                    from sam3.utils import box_ops
+                    box_tensor = torch.tensor(
+                        bbox, device=self._device, dtype=torch.float32
+                    ).view(1, 4)
+                    box_cxcywh = box_ops.box_xywh_to_cxcywh(box_tensor)
+                    normalized_box = box_cxcywh / torch.tensor(
+                        [img_w, img_h, img_w, img_h], device=self._device, dtype=torch.float32
+                    )
+                    boxes = normalized_box.view(1, 1, 4)
+                    labels = torch.tensor(
+                        [prompt.label], device=self._device, dtype=torch.bool
+                    ).view(1, 1)
+                    state["geometric_prompt"].append_boxes(boxes, labels)
+                    
+                elif encoding_method == "grid_simple":
+                    # Simple uniform grid sampling
+                    spacing = prompt.encoding_params.get("spacing", 16)
+                    max_points = prompt.encoding_params.get("max_points", 50)
+                    
+                    points, point_labels = self._processor._mask_to_grid_simple(
+                        mask, spacing=spacing, max_points=max_points
+                    )
+                    
+                    if points:
+                        normalized_points = [
+                            [x / img_w, y / img_h] for x, y in points
+                        ]
+                        points_tensor = torch.tensor(
+                            normalized_points, device=self._device, dtype=torch.float32
+                        ).view(len(points), 1, 2)
+                        labels_tensor = torch.tensor(
+                            point_labels, device=self._device, dtype=torch.bool
+                        ).view(len(points), 1)
+                        state["geometric_prompt"].append_points(points_tensor, labels_tensor)
+                        
+                elif encoding_method == "grid_hybrid":
+                    # Hybrid boundary + interior sampling
+                    max_points = prompt.encoding_params.get("max_points", 100)
+                    boundary_ratio = prompt.encoding_params.get("boundary_ratio", 0.3)
+                    
+                    points, point_labels = self._processor._mask_to_grid_hybrid(
+                        mask, max_points=max_points, boundary_ratio=boundary_ratio
+                    )
+                    
+                    if points:
+                        normalized_points = [
+                            [x / img_w, y / img_h] for x, y in points
+                        ]
+                        points_tensor = torch.tensor(
+                            normalized_points, device=self._device, dtype=torch.float32
+                        ).view(len(points), 1, 2)
+                        labels_tensor = torch.tensor(
+                            point_labels, device=self._device, dtype=torch.bool
+                        ).view(len(points), 1)
+                        state["geometric_prompt"].append_points(points_tensor, labels_tensor)
+                        
+                else:
+                    raise ValueError(f"Unknown encoding_method: {encoding_method}")
 
         # Encode all prompts together
         with torch.profiler.record_function("SAM3Image._encode_prompt"):

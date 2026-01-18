@@ -110,6 +110,8 @@ class BaseBenchmark(ABC):
         predictor: Optional[CrossImagePredictor] = None,
         output_dir: Optional[Path] = None,
         confidence_threshold: float = 0.5,
+        mask_encoding_method: str = "default",
+        mask_encoding_params: Optional[dict] = None,
     ):
         """Initialize the benchmark.
 
@@ -117,12 +119,16 @@ class BaseBenchmark(ABC):
             predictor: CrossImagePredictor instance (created if None)
             output_dir: Directory to save results and visualizations
             confidence_threshold: Confidence threshold for predictions
+            mask_encoding_method: Encoding method for mask prompts
+            mask_encoding_params: Additional parameters for mask encoding
         """
         self.predictor = predictor or CrossImagePredictor(
             confidence_threshold=confidence_threshold
         )
         self.output_dir = Path(output_dir) if output_dir else None
         self.confidence_threshold = confidence_threshold
+        self.mask_encoding_method = mask_encoding_method
+        self.mask_encoding_params = mask_encoding_params or {}
 
         if self.output_dir:
             self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -177,6 +183,8 @@ class BaseBenchmark(ABC):
             config={
                 "confidence_threshold": self.confidence_threshold,
                 "prompt_types": prompt_types,
+                "mask_encoding_method": self.mask_encoding_method,
+                "mask_encoding_params": self.mask_encoding_params,
             },
         )
 

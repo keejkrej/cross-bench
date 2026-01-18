@@ -59,6 +59,11 @@ def segmentation(
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
     visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
+    # Mask encoding options
+    mask_encoding: Annotated[str, typer.Option("--mask-encoding", "-m", help="Mask encoding method: default, box, grid_simple, grid_hybrid")] = "default",
+    grid_spacing: Annotated[int, typer.Option("--grid-spacing", help="Grid spacing for grid_simple")] = 16,
+    grid_max_points: Annotated[int, typer.Option("--grid-max-points", help="Max points for grid methods")] = 50,
+    grid_boundary_ratio: Annotated[float, typer.Option("--grid-boundary-ratio", help="Boundary ratio for grid_hybrid")] = 0.3,
     # Geometry encoder flags
     points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct")] = True,
     points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool")] = True,
@@ -96,12 +101,21 @@ def segmentation(
         'masks_pos_enc': masks_pos,
     }
     
+    # Build mask encoding params
+    mask_encoding_params = {
+        'spacing': grid_spacing,
+        'max_points': grid_max_points,
+        'boundary_ratio': grid_boundary_ratio,
+    }
+    
     # Create predictor and benchmark
     predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
     benchmark = SegmentationBenchmark(
         predictor=predictor,
         output_dir=output_dir,
         confidence_threshold=threshold,
+        mask_encoding_method=mask_encoding,
+        mask_encoding_params=mask_encoding_params,
     )
 
     # Parse prompt types
@@ -164,6 +178,11 @@ def transfer(
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
     visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
+    # Mask encoding options
+    mask_encoding: Annotated[str, typer.Option("--mask-encoding", "-m", help="Mask encoding method: default, box, grid_simple, grid_hybrid")] = "default",
+    grid_spacing: Annotated[int, typer.Option("--grid-spacing", help="Grid spacing for grid_simple")] = 16,
+    grid_max_points: Annotated[int, typer.Option("--grid-max-points", help="Max points for grid methods")] = 50,
+    grid_boundary_ratio: Annotated[float, typer.Option("--grid-boundary-ratio", help="Boundary ratio for grid_hybrid")] = 0.3,
     # Geometry encoder flags
     points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct")] = True,
     points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool")] = True,
@@ -201,12 +220,21 @@ def transfer(
         'masks_pos_enc': masks_pos,
     }
 
+    # Build mask encoding params
+    mask_encoding_params = {
+        'spacing': grid_spacing,
+        'max_points': grid_max_points,
+        'boundary_ratio': grid_boundary_ratio,
+    }
+
     # Create predictor and benchmark
     predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
     benchmark = ConceptTransferBenchmark(
         predictor=predictor,
         output_dir=output_dir,
         confidence_threshold=threshold,
+        mask_encoding_method=mask_encoding,
+        mask_encoding_params=mask_encoding_params,
     )
 
     # Parse prompt types
