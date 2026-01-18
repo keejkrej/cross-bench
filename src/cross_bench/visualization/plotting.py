@@ -355,8 +355,12 @@ def plot_transfer_comparison(
     """
     fig, axes = plt.subplots(1, 2, figsize=figsize)
 
+    # Get actual image names from file paths (with extension)
+    ref_name = sample.reference_image_path.name
+    tgt_name = sample.target_image_path.name
+    
     # Reference image
-    ref_title = f"Reference: {ref_result.num_detections}"
+    ref_title = f"Reference: {ref_name}"
     if ref_iou is not None:
         ref_title += f" (IoU: {ref_iou:.3f})"
     
@@ -370,7 +374,7 @@ def plot_transfer_comparison(
     )
 
     # Target image
-    tgt_title = f"Target: {tgt_result.num_detections}"
+    tgt_title = f"Target: {tgt_name}"
     if tgt_iou is not None:
         tgt_title += f" (IoU: {tgt_iou:.3f})"
     
@@ -382,6 +386,16 @@ def plot_transfer_comparison(
         title=tgt_title,
         show_prompt=False,
     )
+    
+    # Draw target ground truth mask contour if available
+    if sample.target_mask is not None:
+        _overlay_mask(
+            axes[1],
+            sample.target_mask,
+            contour_color="lime",
+            contour_linestyle="--",
+            contour_only=True,
+        )
 
     if title:
         fig.suptitle(title, fontsize=14, fontweight="bold")
