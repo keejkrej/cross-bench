@@ -17,13 +17,14 @@ from PIL import Image
 
 @dataclass
 class DatasetSample:
-    """A single sample in the cross-image benchmark dataset.
+    """A single dataset sample for cross-image segmentation.
 
     Attributes:
-        sample_id: Unique identifier for this sample
+        sample_id: Unique identifier for the sample
         reference_image_path: Path to the reference image
         reference_mask_path: Path to the reference mask (binary, white=object)
         target_image_path: Path to the target image
+        target_mask_path: Path to the target mask (binary, white=object)
         category: Optional category/class name for the object
         metadata: Optional additional metadata
     """
@@ -31,6 +32,7 @@ class DatasetSample:
     reference_image_path: Path
     reference_mask_path: Path
     target_image_path: Path
+    target_mask_path: Optional[Path] = None
     category: Optional[str] = None
     metadata: dict = field(default_factory=dict)
 
@@ -38,6 +40,7 @@ class DatasetSample:
     _reference_image: Optional[Image.Image] = field(default=None, repr=False)
     _reference_mask: Optional[np.ndarray] = field(default=None, repr=False)
     _target_image: Optional[Image.Image] = field(default=None, repr=False)
+    _target_mask: Optional[np.ndarray] = field(default=None, repr=False)
 
     @property
     def reference_image(self) -> Image.Image:
@@ -62,11 +65,21 @@ class DatasetSample:
             self._target_image = Image.open(self.target_image_path).convert("RGB")
         return self._target_image
 
+    @property
+    def target_mask(self) -> Optional[np.ndarray]:
+        """Load and return the target mask as binary numpy array."""
+        if self._target_mask is None and self.target_mask_path:
+            mask_img = Image.open(self.target_mask_path).convert("L")
+            mask_np = np.array(mask_img)
+            self._target_mask = (mask_np > 128).astype(np.float32)
+        return self._target_mask
+
     def clear_cache(self) -> None:
         """Clear cached image data to free memory."""
         self._reference_image = None
         self._reference_mask = None
         self._target_image = None
+        self._target_mask = None
 
     def get_mask_bbox(self) -> tuple[int, int, int, int]:
         """Get bounding box of the mask in XYWH format.
@@ -262,6 +275,7 @@ class CrossImageDataset:
                 reference_image_path=img_files[ref_stem],
                 reference_mask_path=msk_files[ref_stem],
                 target_image_path=img_files[tgt_stem],
+                target_mask_path=msk_files[tgt_stem],
             )
             dataset.add_sample(sample)
 

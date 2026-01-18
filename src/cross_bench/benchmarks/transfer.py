@@ -105,6 +105,8 @@ class ConceptTransferBenchmark(BaseBenchmark):
                         "category": sample.category,
                         "reference_detections": ref_result.num_detections,
                         "target_detections": tgt_result.num_detections,
+                        "reference_mask_path": str(sample.reference_mask_path),
+                        "target_mask_path": str(sample.target_mask_path) if sample.target_mask_path else None,
                     },
                 )
                 results.append(result)
@@ -143,10 +145,11 @@ class ConceptTransferBenchmark(BaseBenchmark):
             )
 
         prompt = prompts[prompt_type]
+        prompt_map = {prompt.prompt_type: prompt}
         ref_result, tgt_result = self.predictor.segment_and_transfer(
             reference_image=sample.reference_image,
             target_image=sample.target_image,
-            prompt=prompt,
+            prompts=prompt_map,
             threshold=self.confidence_threshold,
         )
 

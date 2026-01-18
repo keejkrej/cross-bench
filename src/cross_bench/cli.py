@@ -118,6 +118,25 @@ def segmentation(
 
     success(f"Completed [bold]{len(run)}[/bold] benchmark results")
 
+    # Calculate and print scores
+    scores = benchmark.calculate_scores(run)
+    
+    console.print("\n[bold]Summary:[/bold]")
+    for ptype in prompt_types:
+        results = run.filter_by_prompt_type(ptype)
+        if results:
+            total_ref = sum(r.metadata.get("reference_detections", 0) for r in results)
+            total_tgt = sum(r.metadata.get("target_detections", 0) for r in results)
+            console.print(f"  [magenta]{ptype}[/magenta]: {len(results)} samples, "
+                         f"[cyan]{total_ref}[/cyan] ref detections, "
+                         f"[green]{total_tgt}[/green] target detections")
+    
+    console.print("\n[bold]Scores:[/bold]")
+    console.print(f"  Reference IoU: [cyan]{scores['reference_iou_avg']:.3f}[/cyan] "
+                 f"({scores['reference_iou_count']} samples)")
+    console.print(f"  Target IoU: [green]{scores['target_iou_avg']:.3f}[/green] "
+                 f"({scores['target_iou_count']} samples)")
+
     # Save visualizations
     if visualize:
         info("Generating visualizations...")
@@ -204,7 +223,9 @@ def transfer(
 
     success(f"Completed [bold]{len(run)}[/bold] benchmark results")
 
-    # Print summary
+    # Calculate and print scores
+    scores = benchmark.calculate_scores(run)
+    
     console.print("\n[bold]Summary:[/bold]")
     for ptype in prompt_types:
         results = run.filter_by_prompt_type(ptype)
@@ -214,6 +235,12 @@ def transfer(
             console.print(f"  [magenta]{ptype}[/magenta]: {len(results)} samples, "
                          f"[cyan]{total_ref}[/cyan] ref detections, "
                          f"[green]{total_tgt}[/green] target detections")
+    
+    console.print("\n[bold]Scores:[/bold]")
+    console.print(f"  Reference IoU: [cyan]{scores['reference_iou_avg']:.3f}[/cyan] "
+                 f"({scores['reference_iou_count']} samples)")
+    console.print(f"  Target IoU: [green]{scores['target_iou_avg']:.3f}[/green] "
+                 f"({scores['target_iou_count']} samples)")
 
     # Save visualizations
     if visualize:
