@@ -190,32 +190,29 @@ class CrossImageDataset:
     def from_directory(
         cls,
         directory: Path | str,
-        reference_dir: str = "reference",
+        images_dir: str = "images",
         mask_dir: str = "masks",
-        target_dir: str = "target",
         image_extensions: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp"),
     ) -> "CrossImageDataset":
-        """Load dataset from a directory with standard structure.
+        """Load dataset from a directory with images and masks.
 
         Expected structure:
         directory/
-            reference/
+            images/
                 img001.jpg
                 img002.jpg
             masks/
                 img001.png
                 img002.png
-            target/
-                img001.jpg
-                img002.jpg
 
         Files are matched by stem (filename without extension).
+        For cross-image transfer, each image is used as reference with its mask,
+        and other images in the dataset serve as targets.
 
         Args:
             directory: Root directory of the dataset
-            reference_dir: Subdirectory name for reference images
+            images_dir: Subdirectory name for images
             mask_dir: Subdirectory name for masks
-            target_dir: Subdirectory name for target images
             image_extensions: Tuple of valid image extensions
 
         Returns:
@@ -223,9 +220,8 @@ class CrossImageDataset:
         """
         directory = Path(directory)
 
-        ref_dir = directory / reference_dir
+        img_dir = directory / images_dir
         msk_dir = directory / mask_dir
-        tgt_dir = directory / target_dir
 
         # Build lookup dictionaries by stem
         def get_files_by_stem(dir_path: Path) -> dict[str, Path]:
@@ -236,23 +232,25 @@ class CrossImageDataset:
                         files[f.stem] = f
             return files
 
-        ref_files = get_files_by_stem(ref_dir)
+        img_files = get_files_by_stem(img_dir)
         msk_files = get_files_by_stem(msk_dir)
-        tgt_files = get_files_by_stem(tgt_dir)
 
-        # Find common stems
-        common_stems = set(ref_files.keys()) & set(msk_files.keys()) & set(tgt_files.keys())
+        # Find common stems (images with masks)
+        common_stems = sorted(set(img_files.keys()) & set(msk_files.keys()))
 
         dataset = cls(name=directory.name)
 
-        for stem in sorted(common_stems):
-            sample = DatasetSample(
-                sample_id=stem,
-                reference_image_path=ref_files[stem],
-                reference_mask_path=msk_files[stem],
-                target_image_path=tgt_files[stem],
-            )
-            dataset.add_sample(sample)
+        # Create cross-image pairs: each image as reference, others as targets
+        for i, ref_stem in enumerate(common_stems):
+            for j, tgt_stem in enumerate(common_stems):
+                if i != j:  # Don't use same image as both ref and target
+                    sample = DatasetSample(
+                        sample_id=f"{ref_stem}_to_{tgt_stem}",
+                        reference_image_path=img_files[ref_stem],
+                        reference_mask_path=msk_files[ref_stem],
+                        target_image_path=img_files[tgt_stem],
+                    )
+                    dataset.add_sample(sample)
 
         return dataset
 
