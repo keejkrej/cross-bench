@@ -356,7 +356,7 @@ def plot_transfer_comparison(
     fig, axes = plt.subplots(1, 2, figsize=figsize)
 
     # Reference image
-    ref_title = f"Reference: {sample.sample_id}"
+    ref_title = f"Reference: {ref_result.num_detections}"
     if ref_iou is not None:
         ref_title += f" (IoU: {ref_iou:.3f})"
     
@@ -370,7 +370,7 @@ def plot_transfer_comparison(
     )
 
     # Target image
-    tgt_title = f"Target: {tgt_result.num_detections} detections"
+    tgt_title = f"Target: {tgt_result.num_detections}"
     if tgt_iou is not None:
         tgt_title += f" (IoU: {tgt_iou:.3f})"
     
