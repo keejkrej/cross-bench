@@ -11,11 +11,43 @@ Cross-Bench benchmarks two key capabilities of SAM3's cross-image segmentation:
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.10+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- The `sam3` repository cloned alongside this repo
+
+### Directory Structure
+
+```
+sam-project/
+├── sam3/           # SAM3 fork (feat/cross-image branch)
+└── cross-bench/    # This repo
+```
+
+### Setup with uv (Recommended)
+
+```bash
+# Clone both repos
+git clone https://github.com/keejkrej/sam3.git -b feat/cross-image
+git clone https://github.com/keejkrej/cross-bench.git -b feat/sam
+
+cd cross-bench
+
+# Install cross-bench dependencies
+uv sync
+
+# Install SAM3 as editable from local directory (with all extras)
+uv pip install -e "../sam3[notebooks,dev]"
+```
+
+### Setup with pip
+
 ```bash
 # Install cross-bench
 pip install -e .
 
-# Install SAM3 from the fork (required for running benchmarks)
+# Install SAM3 from the fork
 pip install git+https://github.com/keejkrej/sam3.git@feat/cross-image
 ```
 
@@ -183,11 +215,9 @@ The fork contains modifications to enable:
 - Prompt embedding extraction
 - Cross-image concept transfer
 - Enhanced processor API
+- `NaiveMaskEncoder` for mask prompts without pretrained weights
 
-Install with:
-```bash
-pip install git+https://github.com/keejkrej/sam3.git@feat/cross-image
-```
+See [Installation](#installation) for setup instructions.
 
 ## License
 

@@ -17,13 +17,14 @@ from PIL import Image
 
 @dataclass
 class DatasetSample:
-    """A single sample in the cross-image benchmark dataset.
+    """A single dataset sample for cross-image segmentation.
 
     Attributes:
-        sample_id: Unique identifier for this sample
+        sample_id: Unique identifier for the sample
         reference_image_path: Path to the reference image
         reference_mask_path: Path to the reference mask (binary, white=object)
         target_image_path: Path to the target image
+        target_mask_path: Path to the target mask (binary, white=object)
         category: Optional category/class name for the object
         metadata: Optional additional metadata
     """
@@ -31,6 +32,7 @@ class DatasetSample:
     reference_image_path: Path
     reference_mask_path: Path
     target_image_path: Path
+    target_mask_path: Optional[Path] = None
     category: Optional[str] = None
     metadata: dict = field(default_factory=dict)
 
@@ -38,6 +40,7 @@ class DatasetSample:
     _reference_image: Optional[Image.Image] = field(default=None, repr=False)
     _reference_mask: Optional[np.ndarray] = field(default=None, repr=False)
     _target_image: Optional[Image.Image] = field(default=None, repr=False)
+    _target_mask: Optional[np.ndarray] = field(default=None, repr=False)
 
     @property
     def reference_image(self) -> Image.Image:
@@ -62,11 +65,21 @@ class DatasetSample:
             self._target_image = Image.open(self.target_image_path).convert("RGB")
         return self._target_image
 
+    @property
+    def target_mask(self) -> Optional[np.ndarray]:
+        """Load and return the target mask as binary numpy array."""
+        if self._target_mask is None and self.target_mask_path:
+            mask_img = Image.open(self.target_mask_path).convert("L")
+            mask_np = np.array(mask_img)
+            self._target_mask = (mask_np > 128).astype(np.float32)
+        return self._target_mask
+
     def clear_cache(self) -> None:
         """Clear cached image data to free memory."""
         self._reference_image = None
         self._reference_mask = None
         self._target_image = None
+        self._target_mask = None
 
     def get_mask_bbox(self) -> tuple[int, int, int, int]:
         """Get bounding box of the mask in XYWH format.
@@ -190,42 +203,42 @@ class CrossImageDataset:
     def from_directory(
         cls,
         directory: Path | str,
-        reference_dir: str = "reference",
+        images_dir: str = "images",
         mask_dir: str = "masks",
-        target_dir: str = "target",
         image_extensions: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp"),
+        sample_ratio: float = 0.1,
     ) -> "CrossImageDataset":
-        """Load dataset from a directory with standard structure.
+        """Load dataset from a directory with images and masks.
 
         Expected structure:
         directory/
-            reference/
+            images/
                 img001.jpg
                 img002.jpg
             masks/
                 img001.png
                 img002.png
-            target/
-                img001.jpg
-                img002.jpg
 
         Files are matched by stem (filename without extension).
+        For cross-image transfer, each image is used as reference with its mask,
+        and other images in the dataset serve as targets.
 
         Args:
             directory: Root directory of the dataset
-            reference_dir: Subdirectory name for reference images
+            images_dir: Subdirectory name for images
             mask_dir: Subdirectory name for masks
-            target_dir: Subdirectory name for target images
             image_extensions: Tuple of valid image extensions
+            sample_ratio: Fraction of pairs to sample (0.1 = 10%)
 
         Returns:
             CrossImageDataset instance
         """
+        import random
+        
         directory = Path(directory)
 
-        ref_dir = directory / reference_dir
+        img_dir = directory / images_dir
         msk_dir = directory / mask_dir
-        tgt_dir = directory / target_dir
 
         # Build lookup dictionaries by stem
         def get_files_by_stem(dir_path: Path) -> dict[str, Path]:
@@ -236,21 +249,33 @@ class CrossImageDataset:
                         files[f.stem] = f
             return files
 
-        ref_files = get_files_by_stem(ref_dir)
+        img_files = get_files_by_stem(img_dir)
         msk_files = get_files_by_stem(msk_dir)
-        tgt_files = get_files_by_stem(tgt_dir)
 
-        # Find common stems
-        common_stems = set(ref_files.keys()) & set(msk_files.keys()) & set(tgt_files.keys())
+        # Find common stems (images with masks)
+        common_stems = sorted(set(img_files.keys()) & set(msk_files.keys()))
+
+        # Generate all possible pairs
+        all_pairs = [
+            (ref_stem, tgt_stem)
+            for i, ref_stem in enumerate(common_stems)
+            for j, tgt_stem in enumerate(common_stems)
+            if i != j
+        ]
+        
+        # Sample pairs
+        n_samples = max(1, int(len(all_pairs) * sample_ratio))
+        sampled_pairs = random.sample(all_pairs, min(n_samples, len(all_pairs)))
 
         dataset = cls(name=directory.name)
 
-        for stem in sorted(common_stems):
+        for ref_stem, tgt_stem in sampled_pairs:
             sample = DatasetSample(
-                sample_id=stem,
-                reference_image_path=ref_files[stem],
-                reference_mask_path=msk_files[stem],
-                target_image_path=tgt_files[stem],
+                sample_id=f"{ref_stem}_to_{tgt_stem}",
+                reference_image_path=img_files[ref_stem],
+                reference_mask_path=msk_files[ref_stem],
+                target_image_path=img_files[tgt_stem],
+                target_mask_path=msk_files[tgt_stem],
             )
             dataset.add_sample(sample)
 

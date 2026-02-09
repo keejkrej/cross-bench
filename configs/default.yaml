@@ -11,6 +11,16 @@ prompt_types:
   - box
   - point
 
+# Mask encoding method
+# Options: default, box, grid_simple, grid_hybrid
+mask_encoding_method: default
+
+# Mask encoding parameters (for grid methods)
+mask_encoding_params:
+  spacing: 16          # For grid_simple: pixel spacing between points
+  max_points: 50       # Maximum number of points to sample
+  boundary_ratio: 0.3  # For grid_hybrid: fraction of points for boundary
+
 # Maximum samples to process (null for all)
 max_samples: null
 

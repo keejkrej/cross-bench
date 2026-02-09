@@ -33,21 +33,30 @@ class SegmentationBenchmark(BaseBenchmark):
         self,
         sample: DatasetSample,
         prompt_types: list[str],
+        mask_encoding_method: str = "default",
+        mask_encoding_params: dict = None,
     ) -> dict[str, Prompt]:
         """Create prompts from a dataset sample.
 
         Args:
             sample: Dataset sample with mask
             prompt_types: List of prompt types to create
+            mask_encoding_method: Encoding method for mask prompts
+            mask_encoding_params: Additional encoding parameters
 
         Returns:
             Dictionary mapping prompt type to Prompt object
         """
         prompts = {}
+        mask_encoding_params = mask_encoding_params or {}
 
         for ptype in prompt_types:
             if ptype == "mask":
-                prompts["mask"] = Prompt.from_mask(sample.reference_mask)
+                prompts["mask"] = Prompt.from_mask(
+                    sample.reference_mask,
+                    encoding_method=mask_encoding_method,
+                    **mask_encoding_params
+                )
 
             elif ptype == "box":
                 x, y, w, h = sample.get_mask_bbox()
@@ -81,7 +90,12 @@ class SegmentationBenchmark(BaseBenchmark):
         results = []
 
         # Create prompts from ground truth
-        prompts = self._create_prompts(sample, prompt_types)
+        prompts = self._create_prompts(
+            sample, 
+            prompt_types,
+            mask_encoding_method=self.mask_encoding_method,
+            mask_encoding_params=self.mask_encoding_params,
+        )
 
         for ptype, prompt in prompts.items():
             try:
