@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "cross-bench"
@@ -35,18 +35,19 @@ dependencies = [
     "matplotlib>=3.6.0",
     "torch>=2.0.0",
     "pyyaml>=6.0",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
     "ruff>=0.1.0",
 ]
 sam3 = [
-    # Install SAM3 from the fork for full functionality
-    # pip install git+https://github.com/keejkrej/sam3.git@feat/cross-image
+    # Install SAM3 editable with notebooks and dev extras:
+    # uv pip install -e "../sam3[notebooks,dev]"
 ]
 
 [project.scripts]
@@ -56,13 +57,8 @@ cross-bench = "cross_bench.cli:main"
 Homepage = "https://github.com/keejkrej/cross-bench"
 Repository = "https://github.com/keejkrej/cross-bench"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["cross_bench*"]
-
-[tool.black]
-line-length = 88
-target-version = ["py310", "py311"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/cross_bench"]
 
 [tool.ruff]
 line-length = 88

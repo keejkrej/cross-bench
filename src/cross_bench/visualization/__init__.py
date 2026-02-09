@@ -5,6 +5,7 @@ from cross_bench.visualization.plotting import (
     plot_transfer_comparison,
     plot_benchmark_grid,
     create_benchmark_figure,
+    save_figure,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "plot_transfer_comparison",
     "plot_benchmark_grid",
     "create_benchmark_figure",
+    "save_figure",
 ]

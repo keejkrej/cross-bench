@@ -25,6 +25,47 @@ class BenchmarkResult:
     results: dict[str, SegmentationResult] = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
 
+    def calculate_iou(self, stage: str = "target") -> Optional[float]:
+        """Calculate IoU between prediction and ground truth mask.
+        
+        Args:
+            stage: Which stage to evaluate ("reference" or "target")
+            
+        Returns:
+            IoU score (0-1) or None if no ground truth available
+        """
+        from cross_bench.datasets import DatasetSample
+        
+        # Get the result for this stage
+        result = self.results.get(stage)
+        if not result or not result.masks:
+            return None
+            
+        # Get ground truth mask from metadata if available
+        gt_mask_path = self.metadata.get(f"{stage}_mask_path")
+        if not gt_mask_path:
+            return None
+            
+        # Load ground truth
+        import numpy as np
+        from PIL import Image
+        gt_img = Image.open(gt_mask_path).convert("L")
+        gt_mask = (np.array(gt_img) > 128).astype(np.float32)
+        
+        # Combine predicted masks
+        pred_mask = np.zeros_like(gt_mask)
+        for mask in result.masks:
+            pred_mask = np.maximum(pred_mask, mask)
+            
+        # Calculate IoU
+        intersection = np.sum(pred_mask * gt_mask)
+        union = np.sum(pred_mask) + np.sum(gt_mask) - intersection
+        
+        if union == 0:
+            return 0.0
+            
+        return float(intersection / union)
+
 
 @dataclass
 class BenchmarkRun:
@@ -69,6 +110,8 @@ class BaseBenchmark(ABC):
         predictor: Optional[CrossImagePredictor] = None,
         output_dir: Optional[Path] = None,
         confidence_threshold: float = 0.5,
+        mask_encoding_method: str = "default",
+        mask_encoding_params: Optional[dict] = None,
     ):
         """Initialize the benchmark.
 
@@ -76,12 +119,16 @@ class BaseBenchmark(ABC):
             predictor: CrossImagePredictor instance (created if None)
             output_dir: Directory to save results and visualizations
             confidence_threshold: Confidence threshold for predictions
+            mask_encoding_method: Encoding method for mask prompts
+            mask_encoding_params: Additional parameters for mask encoding
         """
         self.predictor = predictor or CrossImagePredictor(
             confidence_threshold=confidence_threshold
         )
         self.output_dir = Path(output_dir) if output_dir else None
         self.confidence_threshold = confidence_threshold
+        self.mask_encoding_method = mask_encoding_method
+        self.mask_encoding_params = mask_encoding_params or {}
 
         if self.output_dir:
             self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +183,8 @@ class BaseBenchmark(ABC):
             config={
                 "confidence_threshold": self.confidence_threshold,
                 "prompt_types": prompt_types,
+                "mask_encoding_method": self.mask_encoding_method,
+                "mask_encoding_params": self.mask_encoding_params,
             },
         )
 
@@ -160,3 +209,50 @@ class BaseBenchmark(ABC):
             sample.clear_cache()
 
         return run
+
+    def calculate_scores(self, run: BenchmarkRun) -> dict[str, float]:
+        """Calculate evaluation scores for a benchmark run.
+        
+        Args:
+            run: BenchmarkRun with results
+            
+        Returns:
+            Dictionary with scores (IoU, detection rate, etc.)
+        """
+        scores = {
+            "total_samples": len(run.results),
+            "reference_detections": 0,
+            "target_detections": 0,
+            "reference_iou_sum": 0.0,
+            "target_iou_sum": 0.0,
+            "reference_iou_count": 0,
+            "target_iou_count": 0,
+        }
+        
+        for result in run.results:
+            if "reference" in result.results:
+                scores["reference_detections"] += result.results["reference"].num_detections
+                ref_iou = result.calculate_iou("reference")
+                if ref_iou is not None:
+                    scores["reference_iou_sum"] += ref_iou
+                    scores["reference_iou_count"] += 1
+                    
+            if "target" in result.results:
+                scores["target_detections"] += result.results["target"].num_detections
+                tgt_iou = result.calculate_iou("target")
+                if tgt_iou is not None:
+                    scores["target_iou_sum"] += tgt_iou
+                    scores["target_iou_count"] += 1
+        
+        # Calculate averages
+        if scores["reference_iou_count"] > 0:
+            scores["reference_iou_avg"] = scores["reference_iou_sum"] / scores["reference_iou_count"]
+        else:
+            scores["reference_iou_avg"] = 0.0
+            
+        if scores["target_iou_count"] > 0:
+            scores["target_iou_avg"] = scores["target_iou_sum"] / scores["target_iou_count"]
+        else:
+            scores["target_iou_avg"] = 0.0
+        
+        return scores

@@ -35,13 +35,20 @@ class ConceptTransferBenchmark(BaseBenchmark):
         self,
         sample: DatasetSample,
         prompt_types: list[str],
+        mask_encoding_method: str = "default",
+        mask_encoding_params: dict = None,
     ) -> dict[str, Prompt]:
         """Create prompts from a dataset sample."""
         prompts = {}
+        mask_encoding_params = mask_encoding_params or {}
 
         for ptype in prompt_types:
             if ptype == "mask":
-                prompts["mask"] = Prompt.from_mask(sample.reference_mask)
+                prompts["mask"] = Prompt.from_mask(
+                    sample.reference_mask,
+                    encoding_method=mask_encoding_method,
+                    **mask_encoding_params
+                )
 
             elif ptype == "box":
                 x, y, w, h = sample.get_mask_bbox()
@@ -79,15 +86,23 @@ class ConceptTransferBenchmark(BaseBenchmark):
         """
         results = []
 
-        prompts = self._create_prompts(sample, prompt_types)
+        prompts = self._create_prompts(
+            sample, 
+            prompt_types,
+            mask_encoding_method=self.mask_encoding_method,
+            mask_encoding_params=self.mask_encoding_params,
+        )
 
         for ptype, prompt in prompts.items():
             try:
+                # Wrap single prompt in PromptMap
+                prompt_map = {prompt.prompt_type: prompt}
+                
                 # Run segmentation and transfer
                 ref_result, tgt_result = self.predictor.segment_and_transfer(
                     reference_image=sample.reference_image,
                     target_image=sample.target_image,
-                    prompt=prompt,
+                    prompts=prompt_map,
                     threshold=self.confidence_threshold,
                 )
 
@@ -102,6 +117,8 @@ class ConceptTransferBenchmark(BaseBenchmark):
                         "category": sample.category,
                         "reference_detections": ref_result.num_detections,
                         "target_detections": tgt_result.num_detections,
+                        "reference_mask_path": str(sample.reference_mask_path),
+                        "target_mask_path": str(sample.target_mask_path) if sample.target_mask_path else None,
                     },
                 )
                 results.append(result)
@@ -140,10 +157,11 @@ class ConceptTransferBenchmark(BaseBenchmark):
             )
 
         prompt = prompts[prompt_type]
+        prompt_map = {prompt.prompt_type: prompt}
         ref_result, tgt_result = self.predictor.segment_and_transfer(
             reference_image=sample.reference_image,
             target_image=sample.target_image,
-            prompt=prompt,
+            prompts=prompt_map,
             threshold=self.confidence_threshold,
         )
 
