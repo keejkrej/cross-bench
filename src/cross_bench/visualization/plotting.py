@@ -1,6 +1,7 @@
 """Plotting utilities for visualizing segmentation and transfer results."""
 
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from PIL import Image

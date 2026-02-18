@@ -8,9 +8,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from cross_bench.datasets import CrossImageDataset
+from cross_bench.datasets import CrossImageDataset, COCODetectionDataset
 from cross_bench.predictor import CrossImagePredictor, PromptType, Prompt, PromptMap, format_prompt_display
-from cross_bench.benchmarks import SegmentationBenchmark, ConceptTransferBenchmark
+from cross_bench.benchmarks import SegmentationBenchmark, ConceptTransferBenchmark, DetectionBenchmark
 from cross_bench.visualization import (
     plot_transfer_comparison,
     create_benchmark_figure,
@@ -309,6 +309,127 @@ def transfer(
                 )
 
         success(f"Saved visualizations to [bold]{vis_dir}[/bold]")
+
+
+@app.command()
+def detection(
+    dataset: Annotated[
+        str,
+        typer.Option("--dataset", "-d", help="COCO root path or HF repo (detection-datasets/coco) with --from-hf"),
+    ] = "detection-datasets/coco",
+    split: Annotated[str, typer.Option("--split", "-s", help="Split: val/validation (local) or train/validation (HF)")] = "val",
+    from_hf: Annotated[bool, typer.Option("--from-hf/--no-from-hf", help="Load from Hugging Face Hub (uses cache)")] = False,
+    output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output directory for results")] = None,
+    prompts: Annotated[str, typer.Option("--prompts", "-p", help="Comma-separated prompt types")] = "box,point,mask",
+    threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
+    max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = 100,
+    categories: Annotated[Optional[str], typer.Option("--categories", "-c", help="Comma-separated category names to filter")] = None,
+    seed: Annotated[int, typer.Option("--seed", help="Random seed for sampling")] = 42,
+    # Geometry encoder flags
+    points_direct: Annotated[bool, typer.Option("--points-direct/--no-points-direct")] = True,
+    points_pool: Annotated[bool, typer.Option("--points-pool/--no-points-pool")] = True,
+    points_pos: Annotated[bool, typer.Option("--points-pos/--no-points-pos")] = True,
+    boxes_direct: Annotated[bool, typer.Option("--boxes-direct/--no-boxes-direct")] = True,
+    boxes_pool: Annotated[bool, typer.Option("--boxes-pool/--no-boxes-pool")] = True,
+    boxes_pos: Annotated[bool, typer.Option("--boxes-pos/--no-boxes-pos")] = True,
+    masks_direct: Annotated[bool, typer.Option("--masks-direct/--no-masks-direct")] = True,
+    masks_pool: Annotated[bool, typer.Option("--masks-pool/--no-masks-pool")] = True,
+    masks_pos: Annotated[bool, typer.Option("--masks-pos/--no-masks-pos")] = True,
+) -> None:
+    """Run object detection benchmark on COCO-format dataset.
+
+    Evaluates cross-image concept transfer for detection: given a reference object
+    (box/point/mask prompt), transfer to target images and measure mAP, AP@50, AP@75.
+
+    Datasets:
+    - Hugging Face: --from-hf (uses detection-datasets/coco from cache)
+    - Local COCO: path with images/ and annotations/instances_val2017.json
+    """
+    if from_hf:
+        hf_name = str(dataset) if dataset else "detection-datasets/coco"
+        info(f"Loading from Hugging Face: [bold]{hf_name}[/bold]")
+        hf_split = "val" if split in ("val", "validation") else split
+        cat_list = None
+        if categories:
+            cat_list = [c.strip() for c in categories.split(",") if c.strip()]
+        ds = COCODetectionDataset.from_huggingface(
+            name=hf_name,
+            split=hf_split,
+            max_samples=max_samples,
+            categories=cat_list,
+            seed=seed,
+        )
+    else:
+        # Check for local COCO format
+        dataset_path = Path(dataset)
+        annot_candidates = [
+            dataset_path / "annotations" / f"instances_{split}2017.json",
+            dataset_path / f"annotations/instances_{split}.json",
+        ]
+        annot_path = None
+        for p in annot_candidates:
+            if p.exists():
+                annot_path = p
+                break
+
+        if annot_path is None:
+            # Suggest trying HF
+            error(
+                "COCO annotations not found. Try: cross-bench detection --from-hf\n"
+                "Or ensure dataset/annotations/instances_val2017.json exists."
+            )
+            raise typer.Exit(1)
+
+        cat_list = None
+        if categories:
+            cat_list = [c.strip() for c in categories.split(",") if c.strip()]
+        ds = COCODetectionDataset.from_coco(
+            root=dataset_path,
+            split=split,
+            max_samples=max_samples,
+            categories=cat_list,
+            seed=seed,
+        )
+
+    success(f"Loaded COCO detection dataset: [bold]{ds.name}[/bold] ({len(ds)} samples)")
+
+    output_dir = output if output else Path("results") / "detection"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    geo_config = {
+        "points_direct_project": points_direct,
+        "points_pool": points_pool,
+        "points_pos_enc": points_pos,
+        "boxes_direct_project": boxes_direct,
+        "boxes_pool": boxes_pool,
+        "boxes_pos_enc": boxes_pos,
+        "masks_direct_project": masks_direct,
+        "masks_pool": masks_pool,
+        "masks_pos_enc": masks_pos,
+    }
+
+    predictor = CrossImagePredictor(confidence_threshold=threshold, geo_config=geo_config)
+    benchmark = DetectionBenchmark(
+        predictor=predictor,
+        output_dir=output_dir,
+        confidence_threshold=threshold,
+    )
+
+    prompt_types = prompts.split(",")
+    info(f"Running detection benchmark with prompts: [bold]{prompt_types}[/bold]")
+    run = benchmark.run(ds, prompt_types=prompt_types, max_samples=max_samples, verbose=True)
+
+    success(f"Completed [bold]{len(run)}[/bold] benchmark results")
+
+    scores = benchmark.calculate_scores(run)
+
+    console.print("\n[bold]Detection Metrics:[/bold]")
+    console.print(f"  mAP@50:  [cyan]{scores['mAP50']:.3f}[/cyan]")
+    console.print(f"  mAP@75:  [cyan]{scores['mAP75']:.3f}[/cyan]")
+    console.print(f"  Mean IoU: [green]{scores['mean_iou_avg']:.3f}[/green]")
+    console.print(f"  Precision: [green]{scores['precision_avg']:.3f}[/green]")
+    console.print(f"  Recall: [green]{scores['recall_avg']:.3f}[/green]")
+    console.print(f"  Samples: {scores['total_samples']}, GT objects: {scores['n_gt_total']}")
 
 
 @app.command()

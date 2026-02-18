@@ -11,9 +11,18 @@ from pathlib import Path
 
 __version__ = "0.1.0"
 
-from cross_bench.datasets import CrossImageDataset, DatasetSample
+from cross_bench.datasets import (
+    CrossImageDataset,
+    DatasetSample,
+    COCODetectionDataset,
+    COCODetectionSample,
+)
 from cross_bench.predictor import CrossImagePredictor
-from cross_bench.benchmarks import SegmentationBenchmark, ConceptTransferBenchmark
+from cross_bench.benchmarks import (
+    SegmentationBenchmark,
+    ConceptTransferBenchmark,
+    DetectionBenchmark,
+)
 
 
 def get_example_path(name: str) -> Path:
@@ -36,8 +45,11 @@ def get_example_path(name: str) -> Path:
 __all__ = [
     "CrossImageDataset",
     "DatasetSample",
+    "COCODetectionDataset",
+    "COCODetectionSample",
     "CrossImagePredictor",
     "SegmentationBenchmark",
     "ConceptTransferBenchmark",
+    "DetectionBenchmark",
     "get_example_path",
 ]

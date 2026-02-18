@@ -4,10 +4,11 @@ A benchmarking tool for cross-image segmentation/detection with SAM3 using extra
 
 ## Overview
 
-Cross-Bench benchmarks two key capabilities of SAM3's cross-image segmentation:
+Cross-Bench benchmarks three key capabilities of SAM3's cross-image segmentation:
 
 1. **Segmentation from Concept**: Segment objects in a reference image using various prompt types (text, point, box, mask)
 2. **Concept Transfer**: Extract a concept from a reference image and transfer it to find similar objects in a target image
+3. **Object Detection**: Benchmark detection on classic datasets (COCO). Segmentation is trivial with SAM1/SAM2 once the bbox is acquired—the hard part is finding the boxes
 
 ## Installation
 
@@ -74,6 +75,26 @@ dataset/
     └── sample_002.jpg
 ```
 
+### COCO Format (Detection Benchmark)
+
+**Hugging Face** (recommended, uses cache at `~/.cache/huggingface/hub/`):
+```bash
+cross-bench detection --from-hf
+```
+Uses `detection-datasets/coco` from the Hub. If already downloaded, loads from cache.
+
+**Local COCO** structure:
+```
+coco_root/
+├── images/
+│   ├── train2017/
+│   └── val2017/
+└── annotations/
+    ├── instances_train2017.json
+    └── instances_val2017.json
+```
+Download from https://cocodataset.org or https://huggingface.co/datasets/detection-datasets/coco
+
 ### Manifest Format (Optional)
 
 ```json
@@ -102,6 +123,13 @@ cross-bench segmentation --dataset ./data/my_dataset --visualize
 # Run concept transfer benchmark
 cross-bench transfer --dataset ./data/my_dataset --prompts mask,box,point
 
+# Run object detection benchmark (Hugging Face - uses cache)
+cross-bench detection --from-hf --max-samples 100
+cross-bench detection --from-hf -n 500 -c "person,dog,cat"
+
+# Or local COCO
+cross-bench detection -d /path/to/coco -s val -n 100
+
 # Quick single-image test
 cross-bench single \
   --reference img1.jpg \
@@ -119,6 +147,8 @@ from cross_bench import (
     CrossImagePredictor,
     SegmentationBenchmark,
     ConceptTransferBenchmark,
+    DetectionBenchmark,
+    COCODetectionDataset,
 )
 from cross_bench.visualization import plot_transfer_comparison
 
@@ -138,6 +168,21 @@ seg_run = seg_benchmark.run(dataset, prompt_types=["mask", "box", "point"])
 # Run concept transfer benchmark
 transfer_benchmark = ConceptTransferBenchmark(predictor=predictor)
 transfer_run = transfer_benchmark.run(dataset, prompt_types=["mask", "box"])
+
+# Run detection benchmark (Hugging Face)
+coco_ds = COCODetectionDataset.from_huggingface(
+    name="detection-datasets/coco",
+    split="val",
+    max_samples=100,
+    categories=["person", "dog", "cat"],
+)
+
+# Or from local COCO
+# coco_ds = COCODetectionDataset.from_coco(root="/path/to/coco", split="val", ...)
+det_benchmark = DetectionBenchmark(predictor=predictor)
+det_run = det_benchmark.run(coco_ds, prompt_types=["box", "point", "mask"])
+scores = det_benchmark.calculate_scores(det_run)
+print(f"mAP@50: {scores['mAP50']:.3f}, mAP@75: {scores['mAP75']:.3f}")
 
 # Quick single-sample transfer
 sample = dataset[0]
@@ -192,13 +237,15 @@ cross_bench/
 ├── __init__.py           # Package exports
 ├── datasets/             # Dataset loading
 │   ├── __init__.py
-│   └── base.py          # CrossImageDataset, DatasetSample
+│   ├── base.py          # CrossImageDataset, DatasetSample
+│   └── coco.py          # COCODetectionDataset for detection benchmark
 ├── predictor.py          # CrossImagePredictor wrapper
 ├── benchmarks/           # Benchmark implementations
 │   ├── __init__.py
 │   ├── base.py          # BaseBenchmark, BenchmarkResult
 │   ├── segmentation.py  # SegmentationBenchmark
-│   └── transfer.py      # ConceptTransferBenchmark
+│   ├── transfer.py      # ConceptTransferBenchmark
+│   └── detection.py     # DetectionBenchmark (mAP, AP@50, AP@75)
 ├── visualization/        # Plotting utilities
 │   ├── __init__.py
 │   └── plotting.py
