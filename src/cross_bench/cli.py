@@ -11,11 +11,6 @@ from rich.text import Text
 from cross_bench.datasets import CrossImageDataset, COCODetectionDataset
 from cross_bench.predictor import CrossImagePredictor, PromptType, Prompt, PromptMap, format_prompt_display
 from cross_bench.benchmarks import SegmentationBenchmark, ConceptTransferBenchmark, DetectionBenchmark
-from cross_bench.visualization import (
-    plot_transfer_comparison,
-    create_benchmark_figure,
-    save_figure,
-)
 
 console = Console()
 
@@ -58,7 +53,6 @@ def segmentation(
     prompts: Annotated[str, typer.Option("--prompts", "-p", help="Comma-separated prompt types")] = "mask,box,point",
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
-    visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
     # Mask encoding options
     mask_encoding: Annotated[str, typer.Option("--mask-encoding", "-m", help="Mask encoding method: default, box, grid_simple, grid_hybrid")] = "default",
     grid_spacing: Annotated[int, typer.Option("--grid-spacing", help="Grid spacing for grid_simple")] = 16,
@@ -151,22 +145,8 @@ def segmentation(
     console.print(f"  Target IoU: [green]{scores['target_iou_avg']:.3f}[/green] "
                  f"({scores['target_iou_count']} samples)")
 
-    # Save visualizations
-    if visualize:
-        info("Generating visualizations...")
-        vis_dir = output_dir / "visualizations"
-        vis_dir.mkdir(exist_ok=True)
-
-        for result in run:
-            sample = ds[0]
-            for s in ds:
-                if s.sample_id == result.sample_id:
-                    sample = s
-                    break
-
-            fig = create_benchmark_figure(sample, result, show_ground_truth=True)
-            save_figure(fig, vis_dir / f"{result.sample_id}_{result.prompt_type}.png")
-
+    vis_dir = output_dir / "visualizations"
+    if vis_dir.exists():
         success(f"Saved visualizations to [bold]{vis_dir}[/bold]")
 
 
@@ -177,7 +157,6 @@ def transfer(
     prompts: Annotated[str, typer.Option("--prompts", "-p", help="Comma-separated prompt types")] = "mask,box,point",
     threshold: Annotated[float, typer.Option("--threshold", "-t", help="Confidence threshold")] = 0.5,
     max_samples: Annotated[Optional[int], typer.Option("--max-samples", "-n", help="Maximum samples to process")] = None,
-    visualize: Annotated[bool, typer.Option("--visualize", "-v", help="Generate and save visualizations")] = False,
     # Mask encoding options
     mask_encoding: Annotated[str, typer.Option("--mask-encoding", "-m", help="Mask encoding method: default, box, grid_simple, grid_hybrid")] = "default",
     grid_spacing: Annotated[int, typer.Option("--grid-spacing", help="Grid spacing for grid_simple")] = 16,
@@ -270,44 +249,8 @@ def transfer(
     console.print(f"  Target IoU: [green]{scores['target_iou_avg']:.3f}[/green] "
                  f"({scores['target_iou_count']} samples)")
 
-    # Save visualizations
-    if visualize:
-        info("Generating visualizations...")
-        vis_dir = output_dir / "visualizations"
-        vis_dir.mkdir(exist_ok=True)
-
-        for result in run:
-            sample = None
-            for s in ds:
-                if s.sample_id == result.sample_id:
-                    sample = s
-                    break
-
-            if sample is None:
-                continue
-
-            ref_result = result.results.get("reference")
-            tgt_result = result.results.get("target")
-
-            if ref_result and tgt_result:
-                # Calculate IoU scores
-                ref_iou = result.calculate_iou("reference")
-                tgt_iou = result.calculate_iou("target")
-                
-                fig = plot_transfer_comparison(
-                    sample,
-                    ref_result,
-                    tgt_result,
-                    prompts=ref_result.prompts,
-                    title=f"Concept Transfer - {result.prompt_type.upper()}",
-                    ref_iou=ref_iou,
-                    tgt_iou=tgt_iou,
-                )
-                save_figure(
-                    fig,
-                    vis_dir / f"{result.sample_id}_{result.prompt_type}_transfer.png"
-                )
-
+    vis_dir = output_dir / "visualizations"
+    if vis_dir.exists():
         success(f"Saved visualizations to [bold]{vis_dir}[/bold]")
 
 
@@ -430,6 +373,10 @@ def detection(
     console.print(f"  Precision: [green]{scores['precision_avg']:.3f}[/green]")
     console.print(f"  Recall: [green]{scores['recall_avg']:.3f}[/green]")
     console.print(f"  Samples: {scores['total_samples']}, GT objects: {scores['n_gt_total']}")
+
+    vis_dir = output_dir / "visualizations"
+    if vis_dir.exists():
+        success(f"Saved visualizations to [bold]{vis_dir}[/bold]")
 
 
 @app.command()

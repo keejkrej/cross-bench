@@ -13,6 +13,7 @@ from matplotlib.axes import Axes
 from cross_bench.predictor import SegmentationResult, Prompt, PromptType, PromptMap
 from cross_bench.datasets import DatasetSample
 from cross_bench.benchmarks.base import BenchmarkResult
+from cross_bench.datasets.coco import COCODetectionSample
 
 
 # Color palette for masks (colorblind-friendly)
@@ -71,6 +72,12 @@ def _overlay_mask(
     )
 
 
+def _bbox_xywh_to_xyxy(box: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    """Convert COCO XYWH to XYXY format."""
+    x, y, w, h = box
+    return (x, y, x + w, y + h)
+
+
 def _draw_bbox(
     ax: Axes,
     box: tuple[float, float, float, float],
@@ -78,17 +85,21 @@ def _draw_bbox(
     linewidth: float = 2,
     linestyle: str = "--",
     label: str | None = None,
+    format: str = "xyxy",
 ) -> None:
     """Draw a bounding box on axes.
 
     Args:
         ax: Matplotlib axes
-        box: Box in XYXY format (x1, y1, x2, y2)
+        box: Box in XYXY or XYWH format
         color: Box color
         linewidth: Line width
         linestyle: Line style
         label: Optional label to display
+        format: "xyxy" or "xywh" (COCO)
     """
+    if format == "xywh":
+        box = _bbox_xywh_to_xyxy(box)
     x1, y1, x2, y2 = box
     rect = patches.Rectangle(
         (x1, y1),
@@ -401,6 +412,91 @@ def plot_transfer_comparison(
     if title:
         fig.suptitle(title, fontsize=14, fontweight="bold")
 
+    plt.tight_layout()
+    return fig
+
+
+def plot_detection_result(
+    sample: COCODetectionSample,
+    result: BenchmarkResult,
+    figsize: tuple[int, int] = (16, 8),
+    title: Optional[str] = None,
+) -> Figure:
+    """Plot detection benchmark result: reference and target with GT and predicted boxes.
+
+    Left: Reference image with prompt bbox (GT) + predicted detections.
+    Right: Target image with GT boxes + predicted boxes.
+    Title includes category and metrics (AP50, AP75).
+
+    Args:
+        sample: COCODetectionSample with reference_bbox, target_bboxes, category
+        result: BenchmarkResult with results["reference"], results["target"]
+        figsize: Figure size
+        title: Optional overall title
+
+    Returns:
+        Matplotlib figure
+    """
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    ref_result = result.results.get("reference")
+    tgt_result = result.results.get("target")
+    if not ref_result or not tgt_result:
+        plt.close(fig)
+        return fig
+
+    metadata = result.metadata or {}
+    ap50 = metadata.get("ap50")
+    ap75 = metadata.get("ap75")
+    category = getattr(sample, "category", None) or getattr(sample, "category_id", "")
+    metric_str = ""
+    if ap50 is not None:
+        metric_str += f" AP50={ap50:.3f}"
+    if ap75 is not None:
+        metric_str += f" AP75={ap75:.3f}"
+
+    # Reference: prompt bbox (GT) + predicted detections
+    axes[0].imshow(sample.reference_image)
+    _draw_bbox(
+        axes[0],
+        sample.reference_bbox,
+        color="lime",
+        linewidth=2,
+        linestyle="--",
+        label="prompt",
+        format="xywh",
+    )
+    for i, box in enumerate(ref_result.boxes):
+        color = MASK_COLORS[i % len(MASK_COLORS)][:3]
+        _draw_bbox(axes[0], box, color=color, linewidth=1.5)
+    axes[0].set_title(f"Reference: prompt + {ref_result.num_detections} detected", fontsize=11)
+    axes[0].axis("off")
+
+    # Target: GT boxes + predicted boxes
+    axes[1].imshow(sample.target_image)
+    for box in sample.target_bboxes:
+        _draw_bbox(
+            axes[1],
+            box,
+            color="lime",
+            linewidth=2,
+            linestyle="--",
+            format="xywh",
+        )
+    for i, box in enumerate(tgt_result.boxes):
+        color = MASK_COLORS[i % len(MASK_COLORS)][:3]
+        _draw_bbox(axes[1], box, color=color, linewidth=1.5)
+    axes[1].set_title(f"Target: {len(sample.target_bboxes)} GT vs {tgt_result.num_detections} pred", fontsize=11)
+    axes[1].axis("off")
+
+    suptitle = f"{sample.sample_id} | {result.prompt_type}"
+    if category:
+        suptitle += f" | {category}"
+    if metric_str:
+        suptitle += metric_str
+    if title:
+        suptitle = title
+    fig.suptitle(suptitle, fontsize=12, fontweight="bold", y=1.02)
     plt.tight_layout()
     return fig
 

@@ -156,6 +156,24 @@ class BaseBenchmark(ABC):
         """
         pass
 
+    def save_sample_plots(
+        self,
+        sample: DatasetSample,
+        results: list[BenchmarkResult],
+        output_dir: Path,
+    ) -> None:
+        """Save benchmark-specific plots for a sample. Override in subclasses.
+
+        Called after each sample is processed when output_dir is set.
+        Default: no-op.
+
+        Args:
+            sample: The dataset sample
+            results: List of BenchmarkResult from run_sample
+            output_dir: Directory to save plots (e.g. output_dir / "visualizations")
+        """
+        pass
+
     def run(
         self,
         dataset: CrossImageDataset,
@@ -192,6 +210,11 @@ class BaseBenchmark(ABC):
         if max_samples is not None:
             samples = samples[:max_samples]
 
+        vis_dir = None
+        if self.output_dir:
+            vis_dir = self.output_dir / "visualizations"
+            vis_dir.mkdir(parents=True, exist_ok=True)
+
         for i, sample in enumerate(samples):
             if verbose:
                 print(f"[{i+1}/{len(samples)}] Processing {sample.sample_id}...")
@@ -200,6 +223,9 @@ class BaseBenchmark(ABC):
                 results = self.run_sample(sample, prompt_types)
                 for result in results:
                     run.add_result(result)
+
+                if vis_dir:
+                    self.save_sample_plots(sample, results, vis_dir)
             except Exception as e:
                 if verbose:
                     print(f"  Error: {e}")

@@ -4,6 +4,12 @@ Evaluates SAM3's ability to detect objects in target images given a reference
 concept. Focus is on bounding box detection—segmentation is trivial with
 SAM1/SAM2 once the bbox is acquired.
 
+Flow (matches SAM3 cross-image fork):
+- Take GT bbox (e.g. cat) from image A as prompt
+- segment_and_transfer: finds all instances in A, extracts concept, transfers to B
+- Find all instances of that category in image B
+- Compare predicted boxes to GT boxes (mAP, AP@50, AP@75).
+
 Metrics: mAP, AP@50, AP@75, mean IoU (box-level).
 """
 
@@ -297,3 +303,27 @@ class DetectionBenchmark(BaseBenchmark):
         scores["recall_avg"] = scores["recall_sum"] / n
 
         return scores
+
+    def save_sample_plots(
+        self,
+        sample: DatasetSample,
+        results: list[BenchmarkResult],
+        output_dir: Path,
+    ) -> None:
+        """Save detection result plots: reference/target with GT and predicted boxes."""
+        from cross_bench.visualization import plot_detection_result, save_figure
+
+        if not isinstance(sample, COCODetectionSample):
+            return
+
+        for result in results:
+            if "reference" not in result.results or "target" not in result.results:
+                continue
+            try:
+                fig = plot_detection_result(sample, result)
+                save_figure(
+                    fig,
+                    output_dir / f"{result.sample_id}_{result.prompt_type}_detection.png",
+                )
+            except Exception:
+                pass

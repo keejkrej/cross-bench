@@ -17,6 +17,32 @@ from cross_bench.predictor import (
 from cross_bench.benchmarks.base import BaseBenchmark, BenchmarkResult
 
 
+def _save_transfer_plots(sample: DatasetSample, results: list[BenchmarkResult], output_dir: Path) -> None:
+    """Save concept transfer benchmark plots."""
+    from cross_bench.visualization import plot_transfer_comparison, save_figure
+
+    for result in results:
+        ref_result = result.results.get("reference")
+        tgt_result = result.results.get("target")
+        if not ref_result or not tgt_result:
+            continue
+        try:
+            ref_iou = result.calculate_iou("reference")
+            tgt_iou = result.calculate_iou("target")
+            fig = plot_transfer_comparison(
+                sample,
+                ref_result,
+                tgt_result,
+                prompts=ref_result.prompts,
+                title=f"Concept Transfer - {result.prompt_type.upper()}",
+                ref_iou=ref_iou,
+                tgt_iou=tgt_iou,
+            )
+            save_figure(fig, output_dir / f"{result.sample_id}_{result.prompt_type}_transfer.png")
+        except Exception:
+            pass
+
+
 class ConceptTransferBenchmark(BaseBenchmark):
     """Benchmark for cross-image concept transfer.
 
@@ -188,3 +214,12 @@ class ConceptTransferBenchmark(BaseBenchmark):
             concept,
             threshold=self.confidence_threshold,
         )
+
+    def save_sample_plots(
+        self,
+        sample: DatasetSample,
+        results: list[BenchmarkResult],
+        output_dir: Path,
+    ) -> None:
+        """Save concept transfer result plots."""
+        _save_transfer_plots(sample, results, output_dir)

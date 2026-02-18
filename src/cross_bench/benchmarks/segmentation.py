@@ -12,6 +12,20 @@ from cross_bench.predictor import CrossImagePredictor, Prompt, SegmentationResul
 from cross_bench.benchmarks.base import BaseBenchmark, BenchmarkResult
 
 
+def _save_segmentation_plots(sample: DatasetSample, results: list[BenchmarkResult], output_dir: Path) -> None:
+    """Save segmentation benchmark plots."""
+    from cross_bench.visualization import create_benchmark_figure, save_figure
+
+    for result in results:
+        if "reference" not in result.results:
+            continue
+        try:
+            fig = create_benchmark_figure(sample, result, show_ground_truth=True)
+            save_figure(fig, output_dir / f"{result.sample_id}_{result.prompt_type}.png")
+        except Exception:
+            pass
+
+
 class SegmentationBenchmark(BaseBenchmark):
     """Benchmark for single-image segmentation with various prompt types.
 
@@ -159,3 +173,12 @@ class SegmentationBenchmark(BaseBenchmark):
         )
 
         return result, prompt
+
+    def save_sample_plots(
+        self,
+        sample: DatasetSample,
+        results: list[BenchmarkResult],
+        output_dir: Path,
+    ) -> None:
+        """Save segmentation result plots."""
+        _save_segmentation_plots(sample, results, output_dir)
