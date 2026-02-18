@@ -350,11 +350,11 @@ class CrossImagePredictor:
                 state["geometric_prompt"].append_points(points, labels)
 
             elif prompt.prompt_type == PromptType.BOX:
-                from sam3.utils import box_ops
                 box_tensor = torch.tensor(
                     prompt.value, device=self._device, dtype=torch.float32
                 ).view(1, 4)
-                box_cxcywh = box_ops.box_xywh_to_cxcywh(box_tensor)
+                x, y, w, h = box_tensor.unbind(-1)
+                box_cxcywh = torch.stack([x + w / 2, y + h / 2, w, h], dim=-1)
                 normalized_box = box_cxcywh / torch.tensor(
                     [img_w, img_h, img_w, img_h], device=self._device, dtype=torch.float32
                 )
@@ -398,11 +398,11 @@ class CrossImagePredictor:
                 elif encoding_method == "box":
                     # Convert mask to bounding box
                     bbox = self._processor._mask_to_bbox(mask)
-                    from sam3.utils import box_ops
                     box_tensor = torch.tensor(
                         bbox, device=self._device, dtype=torch.float32
                     ).view(1, 4)
-                    box_cxcywh = box_ops.box_xywh_to_cxcywh(box_tensor)
+                    x, y, w, h = box_tensor.unbind(-1)
+                    box_cxcywh = torch.stack([x + w / 2, y + h / 2, w, h], dim=-1)
                     normalized_box = box_cxcywh / torch.tensor(
                         [img_w, img_h, img_w, img_h], device=self._device, dtype=torch.float32
                     )
